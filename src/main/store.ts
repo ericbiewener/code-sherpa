@@ -71,8 +71,8 @@ export class SessionStore {
       .catch(() => {})
       .then(async () => {
         await mkdir(dirname(this.path), { recursive: true, mode: 0o700 })
-        await writeFile(this.path + '.tmp', data, { mode: 0o600 })
-        await rename(this.path + '.tmp', this.path)
+        await writeFile(`${this.path}.tmp`, data, { mode: 0o600 })
+        await rename(`${this.path}.tmp`, this.path)
       })
     this.writes = write
     return write

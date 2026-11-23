@@ -39,7 +39,9 @@ export class PiAdapter extends BaseAdapter {
   }
 
   private async syncState() {
-    const state = await this.process!.call('get_state', {}, 'pi')
+    const process = this.process
+    if (!process) throw new Error('Pi process is not connected')
+    const state = await process.call('get_state', {}, 'pi')
     this.emit({
       type: 'session',
       resumeId: state.sessionFile ?? state.sessionId,
@@ -50,7 +52,9 @@ export class PiAdapter extends BaseAdapter {
   async send(text: string) {
     this.hadError = false
     this.lastError = ''
-    const result = await this.process!.call('prompt', { message: text }, 'pi')
+    const process = this.process
+    if (!process) throw new Error('Pi process is not connected')
+    const result = await process.call('prompt', { message: text }, 'pi')
     if (result.disposition === 'handled') {
       await this.syncState()
       this.emit({ type: 'status', status: 'idle' })

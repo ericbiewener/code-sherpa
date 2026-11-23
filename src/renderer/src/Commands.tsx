@@ -1,5 +1,5 @@
-import { useState } from 'react'
 import { ArrowRight, Loader2, Pencil, Plus, Trash2 } from 'lucide-react'
+import { useState } from 'react'
 import type { AppState, Harness, ProfileInfo, SherpaAPI } from '../../shared/types'
 import { agentNames, cleanError, customCommandName } from './ui'
 
@@ -91,6 +91,7 @@ export function Commands({ state, api, onState, onStarted }: Props) {
       <header className="commands-heading">
         <h1>Agent commands</h1>
         <button
+          type="button"
           className="secondary-button"
           aria-label="Add command"
           disabled={actionsDisabled}
@@ -108,6 +109,7 @@ export function Commands({ state, api, onState, onStarted }: Props) {
         <div className="inline-error" role="alert">
           {state.configError}
           <button
+            type="button"
             onClick={() => void api.reloadConfig().catch((error) => setError(cleanError(error)))}
           >
             Retry
@@ -130,6 +132,7 @@ export function Commands({ state, api, onState, onStarted }: Props) {
             ) : (
               <div className="command-row">
                 <button
+                  type="button"
                   className="command-launch"
                   aria-label={customCommandName(profile.name, profile.command) || profile.command}
                   title={profile.command}
@@ -145,6 +148,7 @@ export function Commands({ state, api, onState, onStarted }: Props) {
                   <ArrowRight size={16} aria-hidden="true" />
                 </button>
                 <button
+                  type="button"
                   className="icon-button command-action"
                   aria-label={`Edit ${customCommandName(profile.name, profile.command) || profile.command}`}
                   title="Edit command"
@@ -160,6 +164,7 @@ export function Commands({ state, api, onState, onStarted }: Props) {
                   <Pencil size={15} />
                 </button>
                 <button
+                  type="button"
                   className="icon-button command-action command-delete"
                   aria-label={`Delete ${customCommandName(profile.name, profile.command) || profile.command}`}
                   title="Delete command"
@@ -196,7 +201,7 @@ export function Commands({ state, api, onState, onStarted }: Props) {
                     ))}
                   </select>
                 </label>
-                <button className="primary-button" disabled={!harness || busy}>
+                <button type="submit" className="primary-button" disabled={!harness || busy}>
                   Start
                 </button>
               </form>
@@ -256,7 +261,6 @@ function CommandEditor({
       <label>
         Name
         <input
-          autoFocus
           value={name}
           maxLength={80}
           placeholder="Optional, e.g. Luna"
@@ -278,7 +282,7 @@ function CommandEditor({
         />
       </label>
       <div className="command-editor-actions">
-        <button className="primary-button" disabled={busy || !command.trim()}>
+        <button type="submit" className="primary-button" disabled={busy || !command.trim()}>
           {busy && <Loader2 size={15} className="spin" />}Save
         </button>
         <button type="button" className="secondary-button" disabled={busy} onClick={onCancel}>

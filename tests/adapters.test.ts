@@ -1,6 +1,6 @@
-import { beforeAll, afterEach, describe, expect, it } from 'vitest'
 import { chmod } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { CodexAdapter } from '../src/main/agents/codex'
 import { PiAdapter } from '../src/main/agents/pi'
 import type { AgentAdapter, AgentEvent, Harness, Session } from '../src/shared/types'
@@ -9,7 +9,7 @@ const fixture = fileURLToPath(new URL('./fixtures/agent.mjs', import.meta.url))
 const adapters: AgentAdapter[] = []
 beforeAll(() => chmod(fixture, 0o755))
 afterEach(() => {
-  adapters.splice(0).forEach((adapter) => adapter.dispose())
+  for (const adapter of adapters.splice(0)) adapter.dispose()
 })
 
 function create(harness: Harness, resumeId?: string) {

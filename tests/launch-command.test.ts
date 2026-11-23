@@ -1,9 +1,9 @@
-import { afterEach, expect, it } from 'vitest'
 import { chmod, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { CodexAdapter } from '../src/main/agents/codex'
+import { afterEach, expect, it } from 'vitest'
 import { ClaudeAdapter } from '../src/main/agents/claude'
+import { CodexAdapter } from '../src/main/agents/codex'
 import { PiAdapter } from '../src/main/agents/pi'
 import type { AgentAdapter, AgentEvent, Session } from '../src/shared/types'
 

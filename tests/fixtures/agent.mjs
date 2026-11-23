@@ -1,14 +1,14 @@
 #!/usr/bin/env node
+import { appendFileSync, writeFileSync } from 'node:fs'
 // Deterministic subprocess fixture. Never calls an AI provider or executes a tool.
 import { createInterface } from 'node:readline'
-import { appendFileSync, writeFileSync } from 'node:fs'
 
 if (process.env.SHERPA_FIXTURE_ARGV)
   writeFileSync(process.env.SHERPA_FIXTURE_ARGV, JSON.stringify(process.argv.slice(2)))
 
 const pi = process.argv.includes('--mode')
 const claude = process.argv.includes('--input-format')
-const output = (record) => process.stdout.write(JSON.stringify(record) + '\n')
+const output = (record) => process.stdout.write(`${JSON.stringify(record)}\n`)
 if (process.argv.includes('--version')) {
   console.log('test-harness 1.0')
   process.exit(0)
@@ -25,16 +25,16 @@ const notify = (method, params) => output({ method, params })
 
 function finish(text) {
   if (claude) {
-    const id = 'claude-message-' + Date.now()
+    const id = `claude-message-${Date.now()}`
     output({
       type: 'stream_event',
-      uuid: id + '-start',
+      uuid: `${id}-start`,
       session_id: 'claude-session',
       event: { type: 'message_start', message: { id } },
     })
     output({
       type: 'stream_event',
-      uuid: id + '-delta',
+      uuid: `${id}-delta`,
       session_id: 'claude-session',
       event: { type: 'content_block_delta', delta: { type: 'text_delta', text } },
     })
@@ -53,7 +53,7 @@ function finish(text) {
     output({
       type: 'result',
       subtype: 'success',
-      uuid: id + '-result',
+      uuid: `${id}-result`,
       session_id: 'claude-session',
       is_error: false,
       result: text,
@@ -88,7 +88,7 @@ function finish(text) {
   } else {
     notify('item/started', {
       item: {
-        id: 'command-' + Date.now(),
+        id: `command-${Date.now()}`,
         type: 'commandExecution',
         command: 'cat README.md',
         aggregatedOutput: 'A project readme.',
@@ -96,7 +96,7 @@ function finish(text) {
         exitCode: 0,
       },
     })
-    const id = 'assistant-' + Date.now()
+    const id = `assistant-${Date.now()}`
     notify('item/started', { item: { id, type: 'agentMessage', text: '' } })
     notify('item/agentMessage/delta', { itemId: id, delta: text.slice(0, 8) })
     setTimeout(() => {
@@ -111,7 +111,7 @@ createInterface({ input: process.stdin })
   .on('line', (line) => {
     const request = JSON.parse(line)
     if (process.env.SHERPA_FIXTURE_TRACE)
-      appendFileSync(process.env.SHERPA_FIXTURE_TRACE, JSON.stringify(request) + '\n')
+      appendFileSync(process.env.SHERPA_FIXTURE_TRACE, `${JSON.stringify(request)}\n`)
     if (claude) {
       if (request.type === 'control_response') {
         const response = request.response

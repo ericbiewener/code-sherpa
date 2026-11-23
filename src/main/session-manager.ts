@@ -4,18 +4,18 @@ import { isAbsolute } from 'node:path'
 import type {
   AgentAdapter,
   AgentEvent,
-  AppState,
   AppConfig,
-  ProfileInfo,
+  AppState,
   InteractionReply,
   NewSession,
+  ProfileInfo,
   Session,
 } from '../shared/types'
 import { createAdapter } from './agents'
 import type { AdapterOptions } from './agents/base'
 import { errorMessage } from './agents/transport'
-import { SessionStore } from './store'
 import { inferHarness, inspectProfiles, resolveCommand } from './commands'
+import type { SessionStore } from './store'
 
 interface Connection {
   adapter: AgentAdapter
@@ -364,5 +364,5 @@ export class SessionManager {
 }
 
 function limitOutput(text: string) {
-  return text.length > 100_000 ? '[Earlier output omitted]\n' + text.slice(-100_000) : text
+  return text.length > 100_000 ? `[Earlier output omitted]\n${text.slice(-100_000)}` : text
 }

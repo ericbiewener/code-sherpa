@@ -1,10 +1,10 @@
 import { execFile } from 'node:child_process'
-import { access } from 'node:fs/promises'
 import { constants } from 'node:fs'
+import { access } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { delimiter, join } from 'node:path'
 import { promisify } from 'node:util'
-import { harnesses, type HarnessInfo } from '../shared/types'
+import { type HarnessInfo, harnesses } from '../shared/types'
 
 const exec = promisify(execFile)
 export const names = { codex: 'Codex', claude: 'Claude Code', pi: 'Pi' }

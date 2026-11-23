@@ -1,9 +1,9 @@
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process'
 import { StringDecoder } from 'node:string_decoder'
 
 // CLI protocols are versioned independently. Keep their untyped wire boundary here;
 // adapters normalize records into the shared, typed AgentEvent model.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- Harness protocols vary by version.
 export type WireRecord = Record<string, any>
 
 export class JsonLines {
@@ -14,8 +14,9 @@ export class JsonLines {
   push(chunk: Buffer) {
     this.buffer += this.decoder.write(chunk)
     if (this.buffer.length > 32 * 1024 * 1024) throw new Error('Agent record exceeds 32 MB')
-    let end: number
-    while ((end = this.buffer.indexOf('\n')) !== -1) {
+    while (true) {
+      const end = this.buffer.indexOf('\n')
+      if (end === -1) break
       const line = this.buffer.slice(0, end).trim()
       this.buffer = this.buffer.slice(end + 1)
       if (!line) continue
@@ -126,7 +127,7 @@ export class AgentProcess {
   write(record: WireRecord): Promise<void> {
     if (this.stopped) return Promise.reject(new Error('Agent process is closed'))
     return new Promise((resolve, reject) => {
-      this.child.stdin.write(JSON.stringify(record) + '\n', (error) =>
+      this.child.stdin.write(`${JSON.stringify(record)}\n`, (error) =>
         error ? reject(error) : resolve(),
       )
     })

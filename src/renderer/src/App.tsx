@@ -38,7 +38,7 @@ export function App() {
       mounted = false
       unsubscribe()
     }
-  }, [api])
+  }, [])
 
   useEffect(() => {
     if (!api || selected) return
@@ -47,7 +47,7 @@ export function App() {
     }
     window.addEventListener('focus', refresh)
     return () => window.removeEventListener('focus', refresh)
-  }, [api, selected, perform])
+  }, [selected, perform])
 
   if (!api)
     return (
@@ -64,7 +64,9 @@ export function App() {
       {error && (
         <div className="inline-error" role="alert">
           {error}
-          <button onClick={() => setError('')}>Dismiss</button>
+          <button type="button" onClick={() => setError('')}>
+            Dismiss
+          </button>
         </div>
       )}
       {state.storageError && (

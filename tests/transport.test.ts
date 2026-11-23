@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
 import { fileURLToPath } from 'node:url'
+import { afterEach, describe, expect, it } from 'vitest'
 import { AgentProcess, JsonLines } from '../src/main/agents/transport'
 
 const fixture = fileURLToPath(new URL('./fixtures/agent.mjs', import.meta.url))
 const processes: AgentProcess[] = []
 afterEach(() => {
-  processes.splice(0).forEach((process) => process.dispose())
+  for (const process of processes.splice(0)) process.dispose()
 })
 
 describe('JSONL transport', () => {

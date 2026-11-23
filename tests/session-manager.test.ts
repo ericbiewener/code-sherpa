@@ -1,10 +1,10 @@
-import { afterEach, beforeEach, expect, it } from 'vitest'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { SessionStore } from '../src/main/store'
-import { SessionManager } from '../src/main/session-manager'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import type { AdapterOptions } from '../src/main/agents/base'
+import { SessionManager } from '../src/main/session-manager'
+import { SessionStore } from '../src/main/store'
 import type { AgentAdapter, AgentEvent } from '../src/shared/types'
 
 let directory: string
@@ -59,7 +59,7 @@ function setup(onStart?: (options: AdapterOptions) => Promise<void>) {
     manager,
     store,
     instances,
-    emit: (event: AgentEvent) => instances.at(-1)!.options.emit(event),
+    emit: (event: AgentEvent) => instances.at(-1)?.options.emit(event),
   }
 }
 

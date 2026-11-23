@@ -1,19 +1,19 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { shellEnvironment } from './discovery'
-import { ConfigStore, configFilePath, defaultConfig } from './config'
-import { errorMessage } from './agents/transport'
-import { SessionManager } from './session-manager'
-import { SessionStore } from './store'
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import {
+  commandSettingsSchema,
   idSchema,
   newSessionSchema,
   promptSchema,
   replySchema,
-  commandSettingsSchema,
 } from '../shared/validation'
+import { errorMessage } from './agents/transport'
+import { ConfigStore, configFilePath, defaultConfig } from './config'
+import { shellEnvironment } from './discovery'
+import { SessionManager } from './session-manager'
+import { SessionStore } from './store'
 
 const directory = fileURLToPath(new URL('.', import.meta.url))
 // Useful for isolated development/testing, without touching normal conversation data.
@@ -67,12 +67,12 @@ else {
           return callback(...args)
         })
       }
-      handle('sherpa:state', () => manager!.snapshot())
+      handle('sherpa:state', () => manager?.snapshot())
       handle('sherpa:command-add', async (input) => {
-        manager!.setConfig(await configStore.addCommand(commandSettingsSchema.parse(input), env))
+        manager?.setConfig(await configStore.addCommand(commandSettingsSchema.parse(input), env))
       })
       handle('sherpa:command-update', async (id, input) => {
-        manager!.setConfig(
+        manager?.setConfig(
           await configStore.updateCommand(
             idSchema.parse(id),
             commandSettingsSchema.parse(input),
@@ -81,29 +81,29 @@ else {
         )
       })
       handle('sherpa:command-delete', async (id) => {
-        manager!.setConfig(await configStore.deleteCommand(idSchema.parse(id)))
+        manager?.setConfig(await configStore.deleteCommand(idSchema.parse(id)))
       })
       handle('sherpa:config-reload', async () => {
         try {
-          manager!.setConfig(await configStore.load())
+          manager?.setConfig(await configStore.load())
         } catch (error) {
-          manager!.setConfigError(errorMessage(error))
+          manager?.setConfigError(errorMessage(error))
           throw error
         }
       })
       handle('sherpa:create', async (input) => {
         const parsed = newSessionSchema.parse(input)
         if (parsed.harness)
-          manager!.setConfig(await configStore.setHarness(parsed.profileId, parsed.harness))
-        return manager!.create(parsed)
+          manager?.setConfig(await configStore.setHarness(parsed.profileId, parsed.harness))
+        return manager?.create(parsed)
       })
-      handle('sherpa:close', (id) => manager!.close(idSchema.parse(id)))
+      handle('sherpa:close', (id) => manager?.close(idSchema.parse(id)))
       handle('sherpa:send', (id, text) =>
-        manager!.send(idSchema.parse(id), promptSchema.parse(text)),
+        manager?.send(idSchema.parse(id), promptSchema.parse(text)),
       )
-      handle('sherpa:interrupt', (id) => manager!.interrupt(idSchema.parse(id)))
+      handle('sherpa:interrupt', (id) => manager?.interrupt(idSchema.parse(id)))
       handle('sherpa:respond', (id, request, reply) =>
-        manager!.respond(idSchema.parse(id), idSchema.parse(request), replySchema.parse(reply)),
+        manager?.respond(idSchema.parse(id), idSchema.parse(request), replySchema.parse(reply)),
       )
       handle('sherpa:open', async (value) => {
         if (typeof value !== 'string') throw new Error('Invalid URL')

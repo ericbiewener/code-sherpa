@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from 'react'
 import {
   ArrowDown,
   ArrowLeft,
@@ -14,6 +13,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import Markdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import type {
@@ -45,13 +45,13 @@ export function Conversation({ session, api, draft, onDraft, perform, onBack }: 
 
   useEffect(() => {
     if (sticky.current) scroll.current?.scrollTo({ top: scroll.current.scrollHeight })
-  }, [session.messages, session.interactions])
+  }, [])
   useEffect(() => {
     if (composer.current) {
       composer.current.style.height = 'auto'
       composer.current.style.height = `${Math.min(composer.current.scrollHeight, 200)}px`
     }
-  }, [draft])
+  }, [])
   useEffect(() => {
     composer.current?.focus()
   }, [])
@@ -77,7 +77,7 @@ export function Conversation({ session, api, draft, onDraft, perform, onBack }: 
   return (
     <div className="conversation">
       <header className="conversation-header">
-        <button className="secondary-button" onClick={onBack}>
+        <button type="button" className="secondary-button" onClick={onBack}>
           <ArrowLeft size={15} />
           Commands
         </button>
@@ -92,7 +92,8 @@ export function Conversation({ session, api, draft, onDraft, perform, onBack }: 
         className="transcript"
         ref={scroll}
         onScroll={() => {
-          const element = scroll.current!
+          const element = scroll.current
+          if (!element) return
           sticky.current = element.scrollHeight - element.scrollTop - element.clientHeight < 100
           setAtBottom(sticky.current)
         }}
@@ -126,6 +127,7 @@ export function Conversation({ session, api, draft, onDraft, perform, onBack }: 
       </div>
       {!atBottom && (
         <button
+          type="button"
           className="jump-bottom secondary-button"
           onClick={() => {
             sticky.current = true
@@ -167,6 +169,7 @@ export function Conversation({ session, api, draft, onDraft, perform, onBack }: 
             </span>
             {busy ? (
               <button
+                type="button"
                 className="stop-button"
                 aria-label="Stop turn"
                 onClick={() => void perform(() => api.interrupt(session.id))}
@@ -176,6 +179,7 @@ export function Conversation({ session, api, draft, onDraft, perform, onBack }: 
               </button>
             ) : (
               <button
+                type="button"
                 className="send-button"
                 aria-label="Send message"
                 disabled={!draft.trim() || sending}
@@ -406,10 +410,16 @@ function InteractionCard({
         </div>
       ))}
       <div className="interaction-actions">
-        <button className="secondary-button" disabled={busy} onClick={() => void respond(false)}>
+        <button
+          type="button"
+          className="secondary-button"
+          disabled={busy}
+          onClick={() => void respond(false)}
+        >
           {isQuestion ? 'Cancel' : 'Deny'}
         </button>
         <button
+          type="button"
           className="primary-button"
           disabled={
             busy || (isQuestion && interaction.questions?.some((q) => !answers[q.id]?.trim()))

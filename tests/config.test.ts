@@ -1,9 +1,9 @@
-import { afterEach, beforeEach, expect, it } from 'vitest'
 import { chmod, lstat, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ConfigStore, configFilePath, defaultConfig } from '../src/main/config'
+import { afterEach, beforeEach, expect, it } from 'vitest'
 import { inferHarness, inspectProfiles, parseCommand, resolveCommand } from '../src/main/commands'
+import { ConfigStore, configFilePath, defaultConfig } from '../src/main/config'
 import { configSchema } from '../src/shared/validation'
 
 const legacyConfig = {

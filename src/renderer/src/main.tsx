@@ -10,7 +10,10 @@ declare global {
   }
 }
 
-createRoot(document.getElementById('root')!).render(
+const root = document.getElementById('root')
+if (!root) throw new Error('Missing app root element')
+
+createRoot(root).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>,

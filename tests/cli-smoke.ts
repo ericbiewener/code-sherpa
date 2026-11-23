@@ -1,7 +1,7 @@
 // Opt-in: connects to real local harnesses but never sends a model prompt.
 import { query, type SDKUserMessage } from '@anthropic-ai/claude-agent-sdk'
-import { discoverHarnesses, shellEnvironment } from '../src/main/discovery'
 import { AgentProcess } from '../src/main/agents/transport'
+import { discoverHarnesses, shellEnvironment } from '../src/main/discovery'
 
 const env = await shellEnvironment()
 const installed = await discoverHarnesses(env)
@@ -18,6 +18,7 @@ for (const harness of installed) {
     })
     async function* empty(): AsyncGenerator<SDKUserMessage> {
       await wait
+      yield { type: 'user', message: { role: 'user', content: '' } } as SDKUserMessage
     }
     const active = query({
       prompt: empty(),

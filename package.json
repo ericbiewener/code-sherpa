@@ -13,9 +13,13 @@
     "test:e2e": "pnpm build && playwright test",
     "test:clis": "tsx tests/cli-smoke.ts",
     "check": "pnpm typecheck && pnpm test",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
-    "package": "pnpm build && electron-builder --dir"
+    "format": "biome check --write .",
+    "format:check": "biome ci .",
+    "package": "pnpm build && electron-builder --dir",
+    "prepare": "husky .husky"
+  },
+  "lint-staged": {
+    "*.{js,jsx,ts,tsx,json,jsonc,css}": "biome check --write --no-errors-on-unmatched"
   },
   "keywords": [],
   "author": "",
@@ -35,10 +39,7 @@
     "directories": {
       "output": "release"
     },
-    "files": [
-      "out/**/*",
-      "package.json"
-    ],
+    "files": ["out/**/*", "package.json"],
     "mac": {
       "category": "public.app-category.developer-tools",
       "identity": null
@@ -55,6 +56,7 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.6.8",
     "@playwright/test": "^1.65.1",
     "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
@@ -64,7 +66,8 @@
     "electron": "^45.4.1",
     "electron-builder": "^26.18.0",
     "electron-vite": "^6.0.0",
-    "prettier": "^3.10.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vite": "^8.3.8",

@@ -1,7 +1,7 @@
-import { test, expect, _electron, type ElectronApplication, type Page } from '@playwright/test'
 import { chmod, mkdir, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { _electron, type ElectronApplication, expect, type Page, test } from '@playwright/test'
 
 let app: ElectronApplication
 let page: Page
@@ -87,8 +87,8 @@ test('shows saved commands, adds through separate fields, and keeps them across 
   const command = 'pi --custom-profile "two words"'
   await addCommand(command)
   const config = JSON.parse(await readFile(env.SHERPA_CONFIG_FILE, 'utf8'))
-  expect(config.profiles.at(-1)).toMatchObject({ command, harness: 'pi' })
-  expect((await page.evaluate(() => window.sherpa!.getState())).sessions).toHaveLength(0)
+  expect(config.profiles[config.profiles.length - 1]).toMatchObject({ command, harness: 'pi' })
+  expect((await page.evaluate(() => window.sherpa?.getState())).sessions).toHaveLength(0)
   await app.close()
   env.SHERPA_DATA_DIR = join(directory, 'fresh-install-data')
   await launch()
@@ -166,7 +166,7 @@ test('edits a saved command inline, persists it, and launches its new agent', as
   await expect(page.locator('.command-list code')).toHaveText([command, 'claude', 'pi'])
   const saved = JSON.parse(await readFile(env.SHERPA_CONFIG_FILE, 'utf8'))
   expect(saved.profiles[0]).toMatchObject({ id: 'codex', command, harness: 'pi' })
-  expect((await page.evaluate(() => window.sherpa!.getState())).sessions).toHaveLength(0)
+  expect((await page.evaluate(() => window.sherpa?.getState())).sessions).toHaveLength(0)
   await app.close()
   await launch()
   await createSession(command)
@@ -181,8 +181,12 @@ test('names, renames, launches, and deletes a command using separate fields', as
   await expect(page.getByRole('button', { name: 'Luna', exact: true })).toBeVisible()
   await expect(page.locator('.command-list code').last()).toHaveText(command)
   let config = JSON.parse(await readFile(env.SHERPA_CONFIG_FILE, 'utf8'))
-  const id = config.profiles.at(-1).id
-  expect(config.profiles.at(-1)).toMatchObject({ name: 'Luna', command, harness: 'codex' })
+  const id = config.profiles[config.profiles.length - 1].id
+  expect(config.profiles[config.profiles.length - 1]).toMatchObject({
+    name: 'Luna',
+    command,
+    harness: 'codex',
+  })
   await page.screenshot({ path: 'test-results/named-command.png' })
   await app.close()
   env.SHERPA_DATA_DIR = join(directory, 'fresh-install-data')
@@ -195,7 +199,12 @@ test('names, renames, launches, and deletes a command using separate fields', as
   await page.getByRole('button', { name: 'Save', exact: true }).click()
   await expect(page.getByRole('textbox')).toHaveCount(0)
   config = JSON.parse(await readFile(env.SHERPA_CONFIG_FILE, 'utf8'))
-  expect(config.profiles.at(-1)).toMatchObject({ id, name: 'Luna Work', command, harness: 'codex' })
+  expect(config.profiles[config.profiles.length - 1]).toMatchObject({
+    id,
+    name: 'Luna Work',
+    command,
+    harness: 'codex',
+  })
   await createSession('Luna Work')
   await expect(page.locator('.conversation-command')).toHaveText('Luna Work')
   const args = JSON.parse(await readFile(env.SHERPA_FIXTURE_ARGV, 'utf8'))
@@ -221,7 +230,7 @@ test('deletes saved commands, including the default and final entry, across rest
   const config = JSON.parse(await readFile(env.SHERPA_CONFIG_FILE, 'utf8'))
   expect(config.defaultProfileId).toBeUndefined()
   expect(config.profiles.map((p: { command: string }) => p.command)).toEqual(['claude', 'pi'])
-  expect((await page.evaluate(() => window.sherpa!.getState())).sessions).toHaveLength(0)
+  expect((await page.evaluate(() => window.sherpa?.getState())).sessions).toHaveLength(0)
   await app.close()
   await launch()
   await expect(page.locator('.command-list code')).toHaveText(['claude', 'pi'])
@@ -261,15 +270,15 @@ test('Codex: chat, tools, approvals, questions, cancellation, and back to comman
     await page.evaluate(() => typeof (window as unknown as { require?: unknown }).require),
   ).toBe('undefined')
   await expect(
-    page.evaluate(() => window.sherpa!.openExternal('file:///etc/passwd')),
+    page.evaluate(() => window.sherpa?.openExternal('file:///etc/passwd')),
   ).rejects.toThrow('Only web links')
   await expect(
-    page.evaluate(() => window.sherpa!.createSession({ profileId: 'unknown', cwd: '/' })),
+    page.evaluate(() => window.sherpa?.createSession({ profileId: 'unknown', cwd: '/' })),
   ).rejects.toThrow()
   await send('wait')
   await page.getByRole('button', { name: 'Commands', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Agent commands' })).toBeVisible()
-  expect((await page.evaluate(() => window.sherpa!.getState())).sessions[0].status).toBe('idle')
+  expect((await page.evaluate(() => window.sherpa?.getState())).sessions[0].status).toBe('idle')
   await createSession('pi')
   await expect(page.locator('.message')).toHaveCount(0)
 })

@@ -1,6 +1,6 @@
+import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readlink, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
-import { randomUUID } from 'node:crypto'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import type { AppConfig, CommandSettings, Harness } from '../shared/types'
 import { commandSettingsSchema, configSchema } from '../shared/validation'
@@ -146,10 +146,10 @@ export class ConfigStore {
             'The configuration changed on disk. Reload from file before saving so external changes are not overwritten.',
           )
         }
-        const text = JSON.stringify(config, null, 2) + '\n'
+        const text = `${JSON.stringify(config, null, 2)}\n`
         await mkdir(dirname(target), { recursive: true, mode: 0o700 })
-        await writeFile(target + '.tmp', text, { mode: 0o600 })
-        await rename(target + '.tmp', target)
+        await writeFile(`${target}.tmp`, text, { mode: 0o600 })
+        await rename(`${target}.tmp`, target)
         this.lastRead = text
       })
     this.writes = write

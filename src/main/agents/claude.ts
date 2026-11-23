@@ -1,10 +1,10 @@
-import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
+import { randomUUID } from 'node:crypto'
 import {
   getSessionInfo,
   getSessionMessages,
-  query,
   type Query,
+  query,
   type SDKUserMessage,
 } from '@anthropic-ai/claude-agent-sdk'
 import { BaseAdapter } from './base'

@@ -1,13 +1,15 @@
-import { afterEach, beforeAll, expect, it } from 'vitest'
 import { chmod } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
+import { afterEach, beforeAll, expect, it } from 'vitest'
 import { ClaudeAdapter } from '../src/main/agents/claude'
 import type { AgentEvent, Session } from '../src/shared/types'
 
 const fixture = fileURLToPath(new URL('./fixtures/agent.mjs', import.meta.url))
 const adapters: ClaudeAdapter[] = []
 beforeAll(() => chmod(fixture, 0o755))
-afterEach(() => adapters.splice(0).forEach((adapter) => adapter.dispose()))
+afterEach(() => {
+  for (const adapter of adapters.splice(0)) adapter.dispose()
+})
 
 function create() {
   const events: AgentEvent[] = []
