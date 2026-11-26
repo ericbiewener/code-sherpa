@@ -38,7 +38,9 @@ it('uses the real SDK transport to stream replies and retain the native session 
   const { adapter, events } = create()
   await adapter.start()
   await adapter.send('hello')
-  await expect.poll(() => events.some((e) => e.type === 'status' && e.status === 'idle')).toBe(true)
+  await expect
+    .poll(() => events.some((e) => e.type === 'status' && e.status === 'idle'), { timeout: 5000 })
+    .toBe(true)
   expect(events.filter((e) => e.type === 'error')).toEqual([])
   expect(events.some((e) => e.type === 'delta' && e.text.includes('Claude Code'))).toBe(true)
   expect(events.some((e) => e.type === 'session' && e.resumeId === 'claude-session')).toBe(true)

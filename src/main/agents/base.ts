@@ -11,7 +11,6 @@ import type {
 export interface AdapterOptions {
   session: Session
   executable: string
-  args?: string[]
   env: NodeJS.ProcessEnv
   emit: (event: AgentEvent) => void
 }

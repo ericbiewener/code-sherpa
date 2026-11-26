@@ -11,10 +11,12 @@ import type {
   ProfileInfo,
   Session,
 } from '../shared/types'
+import { agentSettingsSchema } from '../shared/validation'
 import { createAdapter } from './agents'
 import type { AdapterOptions } from './agents/base'
 import { errorMessage } from './agents/transport'
-import { inferHarness, inspectProfiles, resolveCommand } from './commands'
+import { inspectProfiles, integrationEnvironment, resolveExecutable } from './integrations'
+import { migrateCommand } from './legacy-settings'
 import type { SessionStore } from './store'
 
 interface Connection {
@@ -47,7 +49,18 @@ export class SessionManager {
 
   async load() {
     try {
-      for (const session of await this.store.load()) this.sessions.set(session.id, session)
+      for (const session of await this.store.load()) {
+        if (!session.settings) {
+          const migrated = migrateCommand(
+            session.launchCommand ?? session.harness,
+            session.profileName ?? '',
+            session.harness,
+          )
+          session.settings = migrated.settings
+          session.settingsMigration = migrated.migration
+        }
+        this.sessions.set(session.id, session)
+      }
     } catch (error) {
       this.storageError = errorMessage(error)
     }
@@ -88,9 +101,10 @@ export class SessionManager {
     if (!(await stat(cwd)).isDirectory()) throw new Error('The project path must be a directory')
     const profile = this.config.profiles.find((p) => p.id === input.profileId)
     if (!profile) throw new Error('Choose an existing launch profile')
-    const harness = profile.harness ?? input.harness ?? inferHarness(profile.command, this.env)
-    if (!harness) throw new Error('Choose which agent this command runs')
-    resolveCommand(profile.command, this.env)
+    if (profile.migration)
+      throw new Error('Review and save this integration’s settings before starting a session.')
+    const { harness } = profile
+    resolveExecutable(profile.executable ?? harness, this.env)
     if (
       input.resumeId &&
       [...this.sessions.values()].some(
@@ -100,14 +114,14 @@ export class SessionManager {
       throw new Error('This conversation is already in the sidebar')
     }
     const session: Session = {
-      model: input.model,
       resumeId: input.resumeId,
       harness,
-      launchCommand: profile.command,
+      settings: this.profileSettings(profile),
       profileName: profile.name,
       cwd,
       id: randomUUID(),
-      title: input.resumeId ? 'Resumed conversation' : 'New conversation',
+      title: input.prUrl ?? (input.resumeId ? 'Resumed conversation' : 'New conversation'),
+      prUrl: input.prUrl,
       status: 'starting',
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -115,6 +129,13 @@ export class SessionManager {
       interactions: [],
     }
     this.sessions.set(session.id, session)
+    if (input.initialPrompt) {
+      // Sending owns initialization so the prompt waits for startup dialogs,
+      // remains visible on failure, and is cancelled if the session is closed.
+      session.status = 'idle'
+      void this.send(session.id, input.initialPrompt)
+      return session.id
+    }
     this.changed()
     try {
       const connection = this.connect(session)
@@ -135,15 +156,37 @@ export class SessionManager {
     return session.id
   }
 
+  private profileSettings(profile: AppConfig['profiles'][number]) {
+    const { id: _, migration: __, ...settings } = profile
+    return agentSettingsSchema.parse(settings)
+  }
+
+  configureSession(id: string, profileId: string) {
+    const session = this.get(id)
+    if (!session.settingsMigration || this.connections.has(id))
+      throw new Error('Only legacy sessions awaiting settings review can be reconfigured')
+    const profile = this.config.profiles.find((profile) => profile.id === profileId)
+    if (!profile || profile.harness !== session.harness || profile.migration)
+      throw new Error('Choose reviewed settings for the same integration')
+    session.settings = this.profileSettings(profile)
+    session.profileName = profile.name
+    delete session.settingsMigration
+    delete session.launchCommand
+    session.error = undefined
+    session.status = 'idle'
+    this.changed()
+  }
+
   private connect(session: Session): Connection {
     const existing = this.connections.get(session.id)
     if (existing) return existing
-    const { executable, args } = resolveCommand(session.launchCommand ?? session.harness, this.env)
+    if (session.settingsMigration)
+      throw new Error('Choose reviewed integration settings to resume this conversation.')
+    const executable = resolveExecutable(session.settings?.executable ?? session.harness, this.env)
     const adapter = this.adapterFactory({
       session,
       executable,
-      args,
-      env: this.env,
+      env: integrationEnvironment(session.settings, this.env),
       emit: (event) => {
         if (this.connections.get(session.id)?.adapter === adapter && !this.stopping.has(session.id))
           this.apply(session, event)

@@ -11,9 +11,12 @@ export class PiAdapter extends BaseAdapter {
   async start() {
     const { executable, session, env } = this.options
     const resumeId = session.resumeId
-    const args = [...(this.options.args ?? []), '--mode', 'rpc']
+    const args = ['--mode', 'rpc']
+    const settings = session.settings?.harness === 'pi' ? session.settings.options : {}
+    if (settings.provider) args.push('--provider', settings.provider)
+    if (settings.model) args.push('--model', settings.model)
+    if (settings.thinking) args.push('--thinking', settings.thinking)
     if (resumeId) args.push('--session', resumeId)
-    if (session.model) args.push('--model', session.model)
     this.process = new AgentProcess(
       executable,
       args,

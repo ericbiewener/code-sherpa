@@ -2,6 +2,7 @@ import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { z } from 'zod'
 import { harnesses, type Session } from '../shared/types'
+import { agentSettingsSchema, prUrlSchema, settingsMigrationSchema } from '../shared/validation'
 
 const itemSchema = z.object({
   id: z.string(),
@@ -16,8 +17,11 @@ const sessionSchema = z.object({
   id: z.string(),
   harness: z.enum(harnesses),
   launchCommand: z.string().optional(),
+  settings: agentSettingsSchema.optional(),
+  settingsMigration: settingsMigrationSchema.optional(),
   profileName: z.string().optional(),
   title: z.string(),
+  prUrl: prUrlSchema.optional(),
   cwd: z.string(),
   model: z.string().optional(),
   resumeId: z.string().optional(),
@@ -37,15 +41,26 @@ export class SessionStore {
   async load(): Promise<Session[]> {
     try {
       const data = storeSchema.parse(JSON.parse(await readFile(this.path, 'utf8')))
-      return data.sessions.map((session) => ({
-        ...session,
-        status: 'idle',
-        error: undefined,
-        interactions: [],
-        messages: session.messages.map((item) =>
-          item.state === 'running' ? { ...item, state: 'error' } : item,
-        ),
-      }))
+      return data.sessions.map((session) => {
+        // Older walkthroughs only stored the PR URL in their first user message.
+        const legacyUrl = session.messages
+          .find((item) => item.role === 'user')
+          ?.text.match(
+            /(?:^|\n)Fetch the full PR diff, title, and body for this URL: (\S+)\. Summarize the changeset\.\s*$/,
+          )?.[1]
+        const prUrl = session.prUrl ?? prUrlSchema.safeParse(legacyUrl).data
+        return {
+          ...session,
+          prUrl,
+          title: prUrl && !session.prUrl ? prUrl : session.title,
+          status: 'idle',
+          error: undefined,
+          interactions: [],
+          messages: session.messages.map((item) =>
+            item.state === 'running' ? { ...item, state: 'error' } : item,
+          ),
+        }
+      })
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
       this.writable = false

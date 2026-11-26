@@ -19,24 +19,39 @@ import remarkGfm from 'remark-gfm'
 import type {
   Interaction,
   InteractionReply,
+  ProfileInfo,
   Session,
   SherpaAPI,
   TranscriptItem,
 } from '../../shared/types'
 import type { Perform } from './App'
-import { AgentIcon, agentNames, customCommandName, statusLabels } from './ui'
+import { AgentIcon, agentNames, statusLabels } from './ui'
 
 interface Props {
+  profiles: ProfileInfo[]
   session: Session
   api: SherpaAPI
   draft: string
   onDraft: (text: string) => void
   perform: Perform
   onBack: () => void
+  backLabel: string
+  navigating: boolean
 }
 
-export function Conversation({ session, api, draft, onDraft, perform, onBack }: Props) {
+export function Conversation({
+  session,
+  profiles,
+  api,
+  draft,
+  onDraft,
+  perform,
+  onBack,
+  backLabel,
+  navigating,
+}: Props) {
   const [sending, setSending] = useState(false)
+  const [replacementProfile, setReplacementProfile] = useState('')
   const [atBottom, setAtBottom] = useState(true)
   const scroll = useRef<HTMLDivElement>(null)
   const composer = useRef<HTMLTextAreaElement>(null)
@@ -57,7 +72,7 @@ export function Conversation({ session, api, draft, onDraft, perform, onBack }: 
   }, [])
 
   async function send() {
-    if (busy || sending || !draft.trim()) return
+    if (busy || sending || session.settingsMigration || !draft.trim()) return
     const text = draft.trim()
     setSending(true)
     sticky.current = true
@@ -77,17 +92,61 @@ export function Conversation({ session, api, draft, onDraft, perform, onBack }: 
   return (
     <div className="conversation">
       <header className="conversation-header">
-        <button type="button" className="secondary-button" onClick={onBack}>
+        <button type="button" className="secondary-button" onClick={onBack} disabled={navigating}>
           <ArrowLeft size={15} />
-          Commands
+          {backLabel}
         </button>
-        <span className="conversation-command" title={session.launchCommand}>
-          {customCommandName(session.profileName, session.launchCommand ?? session.harness) ||
-            session.launchCommand ||
-            session.harness}
+        <span className="conversation-command">
+          {session.settings?.name || session.profileName || agentNames[session.harness]}
         </span>
         <span className={`status-badge ${session.status}`}>{statusLabels[session.status]}</span>
       </header>
+      {session.settingsMigration && (
+        <form
+          className="session-settings-recovery"
+          onSubmit={(event) => {
+            event.preventDefault()
+            void perform(() => api.configureSession(session.id, replacementProfile))
+          }}
+        >
+          <p>
+            This session’s old command needs review. Save settings for {agentNames[session.harness]}{' '}
+            in Manage integrations, then choose them here to resume.
+          </p>
+          <details>
+            <summary>Previous command</summary>
+            <code className="legacy-command">{session.settingsMigration.command}</code>
+            <ul>
+              {[...new Set(session.settingsMigration.issues)].map((issue) => (
+                <li key={issue}>{issue}</li>
+              ))}
+            </ul>
+          </details>
+          <label>
+            Resume with settings
+            <select
+              aria-label="Resume with settings"
+              required
+              value={replacementProfile}
+              onChange={(event) => setReplacementProfile(event.target.value)}
+            >
+              <option value="" disabled>
+                Choose settings
+              </option>
+              {profiles
+                .filter((profile) => profile.harness === session.harness && !profile.migration)
+                .map((profile) => (
+                  <option key={profile.id} value={profile.id}>
+                    {profile.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <button type="submit" className="primary-button" disabled={!replacementProfile}>
+            Use these settings
+          </button>
+        </form>
+      )}
       <div
         className="transcript"
         ref={scroll}
@@ -182,7 +241,7 @@ export function Conversation({ session, api, draft, onDraft, perform, onBack }: 
                 type="button"
                 className="send-button"
                 aria-label="Send message"
-                disabled={!draft.trim() || sending}
+                disabled={!draft.trim() || sending || !!session.settingsMigration}
                 onClick={() => void send()}
               >
                 <ArrowUp size={19} />
@@ -278,31 +337,25 @@ function Message({
         </time>
       </div>
       <div className="message-content">
-        {message.role === 'user' ? (
-          <p>{message.text}</p>
-        ) : (
-          <Markdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              a: ({ href, children }) => (
-                <a
-                  href={href}
-                  onClick={(event) => {
-                    event.preventDefault()
-                    if (href) void perform(() => api.openExternal(href))
-                  }}
-                >
-                  {children}
-                </a>
-              ),
-              img: ({ alt }) => (
-                <span className="image-placeholder">[Image: {alt ?? 'image'}]</span>
-              ),
-            }}
-          >
-            {message.text}
-          </Markdown>
-        )}
+        <Markdown
+          remarkPlugins={[remarkGfm]}
+          components={{
+            a: ({ href, children }) => (
+              <a
+                href={href}
+                onClick={(event) => {
+                  event.preventDefault()
+                  if (href) void perform(() => api.openExternal(href))
+                }}
+              >
+                {children}
+              </a>
+            ),
+            img: ({ alt }) => <span className="image-placeholder">[Image: {alt ?? 'image'}]</span>,
+          }}
+        >
+          {message.text}
+        </Markdown>
       </div>
     </article>
   )

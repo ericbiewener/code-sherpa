@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron'
 import {
-  commandSettingsSchema,
+  agentSettingsSchema,
   idSchema,
   newSessionSchema,
   promptSchema,
@@ -68,20 +68,21 @@ else {
         })
       }
       handle('sherpa:state', () => manager?.snapshot())
-      handle('sherpa:command-add', async (input) => {
-        manager?.setConfig(await configStore.addCommand(commandSettingsSchema.parse(input), env))
+      handle('sherpa:profile-add', async (input) => {
+        manager?.setConfig(await configStore.addProfile(agentSettingsSchema.parse(input)))
       })
-      handle('sherpa:command-update', async (id, input) => {
+      handle('sherpa:profile-clone', async (id) => {
+        const { config, profileId } = await configStore.cloneProfile(idSchema.parse(id))
+        manager?.setConfig(config)
+        return profileId
+      })
+      handle('sherpa:profile-update', async (id, input) => {
         manager?.setConfig(
-          await configStore.updateCommand(
-            idSchema.parse(id),
-            commandSettingsSchema.parse(input),
-            env,
-          ),
+          await configStore.updateProfile(idSchema.parse(id), agentSettingsSchema.parse(input)),
         )
       })
-      handle('sherpa:command-delete', async (id) => {
-        manager?.setConfig(await configStore.deleteCommand(idSchema.parse(id)))
+      handle('sherpa:profile-delete', async (id) => {
+        manager?.setConfig(await configStore.deleteProfile(idSchema.parse(id)))
       })
       handle('sherpa:config-reload', async () => {
         try {
@@ -93,10 +94,11 @@ else {
       })
       handle('sherpa:create', async (input) => {
         const parsed = newSessionSchema.parse(input)
-        if (parsed.harness)
-          manager?.setConfig(await configStore.setHarness(parsed.profileId, parsed.harness))
         return manager?.create(parsed)
       })
+      handle('sherpa:configure-session', (id, profileId) =>
+        manager?.configureSession(idSchema.parse(id), idSchema.parse(profileId)),
+      )
       handle('sherpa:close', (id) => manager?.close(idSchema.parse(id)))
       handle('sherpa:send', (id, text) =>
         manager?.send(idSchema.parse(id), promptSchema.parse(text)),
@@ -134,6 +136,7 @@ else {
 
 function createWindow() {
   window = new BrowserWindow({
+    show: false,
     width: 1000,
     height: 760,
     minWidth: 640,
@@ -149,6 +152,10 @@ function createWindow() {
       nodeIntegration: false,
     },
   })
+  window.once('ready-to-show', () => {
+    window?.maximize()
+    window?.show()
+  })
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   window.webContents.on('will-navigate', (event) => event.preventDefault())
   window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) =>
@@ -158,9 +165,10 @@ function createWindow() {
   window.on('closed', () => {
     window = null
   })
-  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL)
+  if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) {
     void window.loadURL(process.env.ELECTRON_RENDERER_URL)
-  else void window.loadFile(join(directory, '../renderer/index.html'))
+    window.webContents.openDevTools()
+  } else void window.loadFile(join(directory, '../renderer/index.html'))
 }
 
 app.on('window-all-closed', () => app.quit())

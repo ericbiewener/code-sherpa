@@ -12,7 +12,7 @@ export class CodexAdapter extends BaseAdapter {
     const resumeId = session.resumeId
     this.process = new AgentProcess(
       executable,
-      [...(this.options.args ?? []), 'app-server', '--listen', 'stdio://'],
+      ['app-server', '--listen', 'stdio://'],
       session.cwd,
       env,
       (record) => this.receive(record),
@@ -27,12 +27,12 @@ export class CodexAdapter extends BaseAdapter {
       },
     })
     await this.process.write({ method: 'initialized', params: {} })
+    const settings = session.settings?.harness === 'codex' ? session.settings.options : {}
+    const { reasoningEffort, ...overrides } = settings
     const params = {
       cwd: session.cwd,
-      ...(session.model ? { model: session.model } : {}),
-      approvalPolicy: 'on-request',
-      approvalsReviewer: 'user',
-      sandbox: 'workspace-write',
+      ...overrides,
+      ...(reasoningEffort ? { config: { model_reasoning_effort: reasoningEffort } } : {}),
     }
     const response = resumeId
       ? await this.process.call('thread/resume', {

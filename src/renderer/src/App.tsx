@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { AppState } from '../../shared/types'
-import { Commands } from './Commands'
+import type { AppState, NewSession } from '../../shared/types'
 import { Conversation } from './Conversation'
+import { Integrations } from './Integrations'
+import { type AppPage, Navigation } from './Navigation'
 import { cleanError } from './ui'
+import { Walkthrough } from './Walkthrough'
 
 export function App() {
   const api = window.sherpa
   const [state, setState] = useState<AppState>()
   const [selected, setSelected] = useState<string | null>(null)
-  const [draft, setDraft] = useState('')
+  const [page, setPage] = useState<AppPage>('walkthrough')
+  const [pending, setPending] = useState(false)
+  const [drafts, setDrafts] = useState<Record<string, string>>({})
   const [error, setError] = useState('')
   const perform = useCallback(async (action: () => Promise<unknown>) => {
     try {
@@ -58,9 +62,44 @@ export function App() {
   if (!state) return <main className="boot-screen">{error || 'Loading…'}</main>
   const active = state.sessions.find((session) => session.id === selected)
 
+  const startSession = async (input: NewSession) => {
+    if (pending) return
+    setPending(true)
+    try {
+      const id = await api.createSession(input)
+      setSelected(id)
+      setError('')
+      setState(await api.getState())
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const navigate = async (nextPage: AppPage) => {
+    if (pending) return
+    setPending(true)
+    try {
+      await perform(async () => {
+        setSelected(null)
+        setError('')
+        setPage(nextPage)
+        await api.reloadConfig()
+      })
+    } finally {
+      setPending(false)
+    }
+  }
+
+  const resumeSession = (id: string) => {
+    if (pending) return
+    setSelected(id)
+    setError('')
+  }
+
   return (
     <main className="app-shell">
       <div className="window-drag" />
+      <Navigation page={page} disabled={pending} onNavigate={(page) => void navigate(page)} />
       {error && (
         <div className="inline-error" role="alert">
           {error}
@@ -76,30 +115,33 @@ export function App() {
       )}
       {active ? (
         <Conversation
+          key={active.id}
           session={active}
+          profiles={state.profiles}
           api={api}
-          draft={draft}
-          onDraft={setDraft}
+          draft={drafts[active.id] ?? ''}
+          onDraft={(text) => setDrafts((current) => ({ ...current, [active.id]: text }))}
           perform={perform}
-          onBack={() =>
-            void perform(async () => {
-              await api.closeSession(active.id)
-              setSelected(null)
-              setDraft('')
-              await api.reloadConfig()
-            })
-          }
+          backLabel={page === 'walkthrough' ? 'Walkthroughs' : 'Integrations'}
+          navigating={pending}
+          onBack={() => void navigate(page)}
         />
-      ) : (
-        <Commands
+      ) : page === 'basic' ? (
+        <Integrations
           state={state}
           api={api}
           onState={setState}
-          onStarted={(id) => {
-            setSelected(id)
-            setDraft('')
-            setError('')
-          }}
+          onStart={startSession}
+          onResume={resumeSession}
+        />
+      ) : (
+        <Walkthrough
+          state={state}
+          busy={pending}
+          onStart={startSession}
+          onResume={resumeSession}
+          onManageIntegrations={() => void navigate('basic')}
+          onReload={() => api.reloadConfig()}
         />
       )}
     </main>

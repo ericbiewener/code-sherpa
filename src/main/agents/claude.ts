@@ -19,8 +19,21 @@ export class ClaudeAdapter extends BaseAdapter {
   private stderr = ''
 
   async start() {
-    const { session } = this.options
+    const { session, env } = this.options
     if (this.resumeId && session.messages.length === 0) {
+      // SDK history readers use the host process environment, not query.options.env.
+      // Never read another profile's transcript or mutate the shared host environment.
+      if (
+        session.settings?.configDir ||
+        env.CLAUDE_CONFIG_DIR !== process.env.CLAUDE_CONFIG_DIR ||
+        env.HOME !== process.env.HOME
+      ) {
+        this.message(
+          'notice',
+          'This session uses a different Claude configuration directory. Its native context will resume when you send a message.',
+        )
+        return
+      }
       const info = await getSessionInfo(this.resumeId, { dir: session.cwd })
       if (!info) {
         // A custom launcher can select a different CLAUDE_CONFIG_DIR/account.
@@ -28,7 +41,7 @@ export class ClaudeAdapter extends BaseAdapter {
         // just because the SDK's local history reader cannot see its transcript.
         this.message(
           'notice',
-          'This transcript is not in the default Claude history store. Your configured command will attempt to resume it when you send a message.',
+          'This transcript is not in the default Claude history store. Your configured integration will attempt to resume it when you send a message.',
         )
         return
       }
@@ -42,6 +55,7 @@ export class ClaudeAdapter extends BaseAdapter {
     this.aborted = false
     this.stderr = ''
     const { session, executable, env } = this.options
+    const settings = session.settings?.harness === 'claude' ? session.settings.options : {}
     async function* prompt(): AsyncGenerator<SDKUserMessage> {
       yield {
         type: 'user',
@@ -55,15 +69,7 @@ export class ClaudeAdapter extends BaseAdapter {
       options: {
         pathToClaudeCodeExecutable: executable,
         spawnClaudeCodeProcess: (options) => {
-          // The SDK may invoke .js/.mjs CLIs via Node. Insert the user's flags
-          // after the script path in that case, before SDK protocol arguments.
-          const args = [...options.args]
-          args.splice(
-            options.command === executable ? 0 : args.indexOf(executable) + 1,
-            0,
-            ...(this.options.args ?? []),
-          )
-          const child = spawn(options.command, args, {
+          const child = spawn(options.command, options.args, {
             cwd: options.cwd,
             env: options.env,
             signal: options.signal,
@@ -78,9 +84,11 @@ export class ClaudeAdapter extends BaseAdapter {
         cwd: session.cwd,
         env,
         resume: this.resumeId,
-        model: session.model,
+        ...settings,
+        ...(settings.permissionMode === 'bypassPermissions'
+          ? { allowDangerouslySkipPermissions: true }
+          : {}),
         includePartialMessages: true,
-        permissionMode: 'default',
         settingSources: ['user', 'project', 'local'],
         systemPrompt: { type: 'preset', preset: 'claude_code' },
         canUseTool: async (toolName, input, context) => {

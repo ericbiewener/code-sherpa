@@ -1,10 +1,19 @@
 #!/usr/bin/env node
-import { appendFileSync, writeFileSync } from 'node:fs'
+import { appendFileSync, existsSync, writeFileSync } from 'node:fs'
 // Deterministic subprocess fixture. Never calls an AI provider or executes a tool.
 import { createInterface } from 'node:readline'
 
 if (process.env.SHERPA_FIXTURE_ARGV)
   writeFileSync(process.env.SHERPA_FIXTURE_ARGV, JSON.stringify(process.argv.slice(2)))
+if (process.env.SHERPA_FIXTURE_ENV)
+  writeFileSync(
+    process.env.SHERPA_FIXTURE_ENV,
+    JSON.stringify({
+      CODEX_HOME: process.env.CODEX_HOME,
+      CLAUDE_CONFIG_DIR: process.env.CLAUDE_CONFIG_DIR,
+      PI_CODING_AGENT_DIR: process.env.PI_CODING_AGENT_DIR,
+    }),
+  )
 
 const pi = process.argv.includes('--mode')
 const claude = process.argv.includes('--input-format')
@@ -15,6 +24,9 @@ if (process.argv.includes('--version')) {
 }
 const pending = new Map()
 const threadId = 'saved-thread'
+let codexApprovalPolicy = process.argv.some((arg) => /^approval_policy=["']?never["']?$/.test(arg))
+  ? 'never'
+  : 'on-request'
 const result = (request, data = {}) =>
   output(
     pi
@@ -107,6 +119,14 @@ function finish(text) {
   }
 }
 
+function finishWhenSignalled() {
+  const timer = setInterval(() => {
+    if (!existsSync(process.env.SHERPA_FIXTURE_COMPLETE)) return
+    clearInterval(timer)
+    finish('Finished while you were away.')
+  }, 20)
+}
+
 createInterface({ input: process.stdin })
   .on('line', (line) => {
     const request = JSON.parse(line)
@@ -150,6 +170,7 @@ createInterface({ input: process.stdin })
           apiKeySource: 'test',
         })
         if (text === 'wait') return
+        if (text === 'background') return finishWhenSignalled()
         if (text === 'approval' || text === 'question') {
           const question = text === 'question'
           pending.set('claude-request', (response) =>
@@ -195,11 +216,13 @@ createInterface({ input: process.stdin })
     const method = request.method ?? request.type
     if (method === 'initialized') return
     if (method === 'initialize') return result(request, { userAgent: 'fixture' })
-    if (method === 'thread/start' || method === 'thread/resume')
+    if (method === 'thread/start' || method === 'thread/resume') {
+      codexApprovalPolicy = request.params.approvalPolicy ?? codexApprovalPolicy
       return result(request, {
         thread: { id: request.params.threadId ?? threadId },
         model: 'test-model',
       })
+    }
     if (method === 'thread/items/list')
       return result(
         request,
@@ -250,7 +273,12 @@ createInterface({ input: process.stdin })
         output({ type: 'message_start', message: { role: 'assistant', content: [] } })
       } else notify('turn/started', { turn: { id: 'turn-1' } })
       if (text === 'wait') return
+      if (text === 'background') return finishWhenSignalled()
       if (text === 'approval') {
+        if (!pi && codexApprovalPolicy === 'never') {
+          finish('Command ran without approval.')
+          return
+        }
         pending.set('approve-1', (response) =>
           finish(
             (pi ? response.confirmed : response.result.decision === 'accept')

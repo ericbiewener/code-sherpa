@@ -70,9 +70,6 @@ for (const harness of installed) {
         const result = await child.call('thread/start', {
           cwd: process.cwd(),
           ephemeral: true,
-          approvalPolicy: 'on-request',
-          approvalsReviewer: 'user',
-          sandbox: 'workspace-write',
         })
         if (!result.thread?.id) throw new Error('Missing Codex thread ID')
       } else {

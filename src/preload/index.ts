@@ -3,11 +3,14 @@ import type { AppState, SherpaAPI } from '../shared/types'
 
 const api: SherpaAPI = {
   getState: () => ipcRenderer.invoke('sherpa:state'),
-  addCommand: (settings) => ipcRenderer.invoke('sherpa:command-add', settings),
-  updateCommand: (id, settings) => ipcRenderer.invoke('sherpa:command-update', id, settings),
-  deleteCommand: (id) => ipcRenderer.invoke('sherpa:command-delete', id),
+  addProfile: (settings) => ipcRenderer.invoke('sherpa:profile-add', settings),
+  cloneProfile: (id) => ipcRenderer.invoke('sherpa:profile-clone', id),
+  updateProfile: (id, settings) => ipcRenderer.invoke('sherpa:profile-update', id, settings),
+  deleteProfile: (id) => ipcRenderer.invoke('sherpa:profile-delete', id),
   reloadConfig: () => ipcRenderer.invoke('sherpa:config-reload'),
   createSession: (input) => ipcRenderer.invoke('sherpa:create', input),
+  configureSession: (id, profileId) =>
+    ipcRenderer.invoke('sherpa:configure-session', id, profileId),
   closeSession: (id) => ipcRenderer.invoke('sherpa:close', id),
   sendMessage: (id, text) => ipcRenderer.invoke('sherpa:send', id, text),
   interrupt: (id) => ipcRenderer.invoke('sherpa:interrupt', id),

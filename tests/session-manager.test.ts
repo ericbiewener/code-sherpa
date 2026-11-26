@@ -43,10 +43,10 @@ function setup(onStart?: (options: AdapterOptions) => Promise<void>) {
   const manager = new SessionManager(
     store,
     {
-      version: 1,
+      version: 2,
       defaultProfileId: 'codex',
       profiles: [
-        { id: 'codex', name: 'Codex', harness: 'codex', command: JSON.stringify(process.execPath) },
+        { id: 'codex', name: 'Codex', harness: 'codex', executable: process.execPath, options: {} },
       ],
     },
     {},
@@ -150,30 +150,66 @@ it('does not overwrite a corrupted store and rejects invalid project paths', asy
   await expect(manager.create({ profileId: 'codex', cwd: path })).rejects.toThrow('directory')
 })
 
-it('keeps existing sessions on their original launch command when profiles change', async () => {
+it('resumes a saved walkthrough with its original agent and native context without repeating the initial prompt', async () => {
+  const { manager, instances, emit } = setup()
+  const prUrl = 'https://github.com/example/project/pull/42'
+  const initialPrompt = 'Summarize this PR.'
+  const id = await manager.create({ profileId: 'codex', cwd: directory, prUrl, initialPrompt })
+  await expect.poll(() => instances[0].prompts).toEqual([initialPrompt])
+  emit({ type: 'status', status: 'idle' })
+  await manager.close(id)
+  expect(instances[0].disposed).toBe(true)
+  await manager.send(id, 'Explain the tests.')
+  expect(instances[1].prompts).toEqual(['Explain the tests.'])
+  expect(instances[1].options.session.resumeId).toBe('native-session')
+  emit({ type: 'status', status: 'idle' })
+  await manager.dispose()
+
+  const reopened = setup()
+  await reopened.manager.load()
+  reopened.manager.setConfig({ version: 2, profiles: [] })
+  expect(reopened.manager.snapshot().sessions).toMatchObject([
+    { id, prUrl, title: prUrl, resumeId: 'native-session', status: 'idle' },
+  ])
+  await reopened.manager.send(id, 'Continue after restarting.')
+  expect(reopened.instances[0].options.session.resumeId).toBe('native-session')
+  expect(reopened.instances[0].options.session.settings?.executable).toBe(process.execPath)
+  expect(reopened.instances[0].prompts).toEqual(['Continue after restarting.'])
+  expect(reopened.manager.snapshot().sessions[0].messages.map((message) => message.text)).toEqual([
+    initialPrompt,
+    'Explain the tests.',
+    'Continue after restarting.',
+  ])
+})
+
+it('keeps existing sessions on their original integration settings when profiles change', async () => {
   const { manager, instances } = setup()
   const original = await createReady(manager)
   manager.setConfig({
-    version: 1,
+    version: 2,
     defaultProfileId: 'codex',
     profiles: [
       {
         id: 'codex',
         name: 'Changed profile',
         harness: 'pi',
-        command: `${JSON.stringify(process.execPath)} --custom-flag`,
+        executable: process.execPath,
+        options: { model: 'new-model', thinking: 'high' },
       },
     ],
   })
   await manager.interrupt(original)
   await manager.send(original, 'continue with original command')
   expect(instances[1].options.session.harness).toBe('codex')
-  expect(instances[1].options.args).toEqual([])
+  expect(instances[1].options.session.settings?.options).toEqual({})
   const next = await createReady(manager)
   const session = manager.snapshot().sessions.find((s) => s.id === next)!
   expect(session.harness).toBe('pi')
   expect(session.profileName).toBe('Changed profile')
-  expect(instances[2].options.args).toEqual(['--custom-flag'])
+  expect(instances[2].options.session.settings?.options).toEqual({
+    model: 'new-model',
+    thinking: 'high',
+  })
 })
 
 it('exposes and answers startup dialogs before initialization completes', async () => {
@@ -213,4 +249,87 @@ it('does not start a prompt after the user cancels a slow reconnection', async (
   await sending
   expect(instances[1].prompts).toEqual([])
   expect(manager.snapshot().sessions[0].status).toBe('idle')
+})
+
+it('sends an initial prompt exactly once after startup dialogs are answered', async () => {
+  let finish!: () => void
+  const { manager, instances } = setup(async (options) => {
+    options.emit({
+      type: 'interaction',
+      interaction: { id: 'startup', kind: 'approval', title: 'Trust project?' },
+    })
+    await new Promise<void>((resolve) => {
+      finish = resolve
+    })
+  })
+  const initialPrompt = 'Fetch this PR and summarize it.'
+  const id = await manager.create({ profileId: 'codex', cwd: directory, initialPrompt })
+  await expect.poll(() => manager.snapshot().sessions[0].status).toBe('waiting')
+  expect(instances[0].prompts).toEqual([])
+  expect(manager.snapshot().sessions[0].messages).toMatchObject([
+    { role: 'user', text: initialPrompt },
+  ])
+  await manager.respond(id, 'startup', { approved: true })
+  finish()
+  await expect.poll(() => instances[0].prompts).toEqual([initialPrompt])
+  expect(manager.snapshot().sessions[0].status).toBe('running')
+})
+
+it('does not send an initial prompt after closing a session during startup', async () => {
+  let finish!: () => void
+  const { manager, instances } = setup(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve
+      }),
+  )
+  const id = await manager.create({
+    profileId: 'codex',
+    cwd: directory,
+    initialPrompt: 'Cancel this walkthrough.',
+  })
+  await expect.poll(() => typeof finish).toBe('function')
+  await manager.close(id)
+  finish()
+  // Drain startup and the pending send before checking for a late prompt.
+  await new Promise((resolve) => setImmediate(resolve))
+  expect(instances[0].prompts).toEqual([])
+  expect(instances[0].disposed).toBe(true)
+  expect(manager.snapshot().sessions[0].status).toBe('idle')
+})
+
+it('preserves an initial prompt and exposes startup failures for recovery', async () => {
+  const { manager, instances } = setup(async () => {
+    throw new Error('Agent could not start')
+  })
+  await manager.create({ profileId: 'codex', cwd: directory, initialPrompt: 'Summarize this PR.' })
+  await expect.poll(() => manager.snapshot().sessions[0].status).toBe('error')
+  expect(manager.snapshot().sessions[0]).toMatchObject({
+    error: 'Agent could not start',
+    messages: [{ role: 'user', text: 'Summarize this PR.' }],
+  })
+  expect(instances[0].prompts).toEqual([])
+  expect(instances[0].disposed).toBe(true)
+})
+
+it('lets legacy sessions with unsupported flags choose reviewed settings without losing native context', async () => {
+  const first = setup()
+  const id = await createReady(first.manager)
+  await first.manager.dispose()
+  const sessions = await first.store.load()
+  delete sessions[0].settings
+  sessions[0].launchCommand = `${JSON.stringify(process.execPath)} --profile old`
+  await first.store.save(sessions)
+  const reopened = setup()
+  await reopened.manager.load()
+  expect(reopened.manager.snapshot().sessions[0].settingsMigration?.command).toContain(
+    '--profile old',
+  )
+  expect(() => reopened.manager.configureSession(id, 'missing')).toThrow('same integration')
+  reopened.manager.configureSession(id, 'codex')
+  expect(reopened.manager.snapshot().sessions[0].settingsMigration).toBeUndefined()
+  await reopened.manager.send(id, 'continue')
+  expect(reopened.instances[0].options.session.resumeId).toBe('native-session')
+  expect(reopened.instances[0].options.session.settings?.executable).toBe(process.execPath)
+  expect(() => reopened.manager.configureSession(id, 'codex')).toThrow('Only legacy')
 })

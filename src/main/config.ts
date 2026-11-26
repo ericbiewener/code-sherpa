@@ -2,13 +2,13 @@ import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, readFile, readlink, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
-import type { AppConfig, CommandSettings, Harness } from '../shared/types'
-import { commandSettingsSchema, configSchema } from '../shared/validation'
-import { inferHarness } from './commands'
+import { type AgentSettings, type AppConfig, agentNames } from '../shared/types'
+import { agentSettingsSchema, configSchema } from '../shared/validation'
+import { readConfig } from './legacy-settings'
 
 export function defaultConfig(): AppConfig {
   return {
-    version: 1,
+    version: 2,
     profiles: [],
   }
 }
@@ -37,7 +37,7 @@ export class ConfigStore {
     try {
       const text = await readFile(this.path, 'utf8')
       if (text.length > 1024 * 1024) throw new Error('Configuration exceeds 1 MB')
-      const config = configSchema.parse(JSON.parse(text))
+      const config = readConfig(JSON.parse(text))
       this.lastRead = text
       this.blocked = false
       return config
@@ -70,57 +70,49 @@ export class ConfigStore {
     return mutation
   }
 
-  addCommand(input: CommandSettings, env: NodeJS.ProcessEnv): Promise<AppConfig> {
-    const settings = commandSettingsSchema.parse(input)
-    const { command } = settings
-    const name = settings.name || command.slice(0, 80)
-    const harness = inferHarness(command, env)
+  addProfile(input: AgentSettings): Promise<AppConfig> {
+    const settings = agentSettingsSchema.parse(input)
+    settings.name ||= agentNames[settings.harness]
     return this.update((config) => {
-      if (config.profiles.some((profile) => profile.command === command && profile.name === name))
-        return
-      config.profiles.push({
-        id: randomUUID(),
-        name,
-        command,
-        ...(harness ? { harness } : {}),
-      })
+      config.profiles.push({ id: randomUUID(), ...settings })
     })
   }
 
-  updateCommand(id: string, input: CommandSettings, env: NodeJS.ProcessEnv): Promise<AppConfig> {
-    const settings = commandSettingsSchema.parse(input)
-    const { command } = settings
-    const name = settings.name || command.slice(0, 80)
-    const harness = inferHarness(command, env)
+  async cloneProfile(id: string): Promise<{ config: AppConfig; profileId: string }> {
+    const profileId = randomUUID()
+    const config = await this.update((config) => {
+      const index = config.profiles.findIndex((profile) => profile.id === id)
+      if (index === -1) throw new Error('Integration settings no longer exist')
+      const source = config.profiles[index]
+      const names = new Set(config.profiles.map((profile) => profile.name))
+      let name: string
+      let copy = 1
+      do {
+        const suffix = copy === 1 ? ' (copy)' : ` (copy ${copy})`
+        name = source.name.slice(0, 80 - suffix.length).trimEnd() + suffix
+        copy++
+      } while (names.has(name))
+      config.profiles.splice(index + 1, 0, { ...structuredClone(source), id: profileId, name })
+    })
+    return { config, profileId }
+  }
+
+  updateProfile(id: string, input: AgentSettings): Promise<AppConfig> {
+    const settings = agentSettingsSchema.parse(input)
+    settings.name ||= agentNames[settings.harness]
     return this.update((config) => {
-      const profile = config.profiles.find((p) => p.id === id)
-      if (!profile) throw new Error('Command no longer exists')
-      if (config.profiles.some((p) => p.id !== id && p.command === command && p.name === name))
-        throw new Error('This command is already saved')
-      profile.name = name
-      if (profile.command === command) return
-      profile.command = command
-      // A changed executable may speak a different protocol. Ask again for wrappers
-      // rather than retaining a potentially incorrect adapter.
-      if (harness) profile.harness = harness
-      else delete profile.harness
+      const index = config.profiles.findIndex((profile) => profile.id === id)
+      if (index === -1) throw new Error('Integration settings no longer exist')
+      config.profiles[index] = { id, ...settings }
     })
   }
 
-  deleteCommand(id: string): Promise<AppConfig> {
+  deleteProfile(id: string): Promise<AppConfig> {
     return this.update((config) => {
-      const index = config.profiles.findIndex((p) => p.id === id)
-      if (index === -1) throw new Error('Command no longer exists')
+      const index = config.profiles.findIndex((profile) => profile.id === id)
+      if (index === -1) throw new Error('Integration settings no longer exist')
       config.profiles.splice(index, 1)
       if (config.defaultProfileId === id) delete config.defaultProfileId
-    })
-  }
-
-  setHarness(id: string, harness: Harness): Promise<AppConfig> {
-    return this.update((config) => {
-      const profile = config.profiles.find((p) => p.id === id)
-      if (!profile) throw new Error('Command no longer exists')
-      profile.harness = harness
     })
   }
 
